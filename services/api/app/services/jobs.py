@@ -211,7 +211,8 @@ def get_job(db: Session, settings: Settings, job_id: str) -> JobResponse:
     analysis = root / "analysis"
     alignment = _read_json(analysis / "alignment.json") if (analysis / "alignment.json").exists() else {}
     timeline = _read_json(analysis / "timeline.json") if (analysis / "timeline.json").exists() else {}
-    captions = [CaptionCue.model_validate(item) for item in alignment.get("cues", [])]
+    caption_payload = timeline.get("captions") or alignment.get("cues", [])
+    captions = [CaptionCue.model_validate(item) for item in caption_payload]
     weak = int(timeline.get("weak_match_count") or 0)
     if not weak and timeline.get("timeline"):
         weak = sum(1 for clip in timeline["timeline"] if clip.get("needs_review"))
@@ -230,6 +231,7 @@ def get_job(db: Session, settings: Settings, job_id: str) -> JobResponse:
         transcript_available=(analysis / "transcript.json").exists(),
         alignment_available=(analysis / "alignment.json").exists(),
         semantic_available=(analysis / "semantic_debug.json").exists(),
+        audio_available=(analysis / "video_audio.json").exists(),
         weak_match_count=weak,
         footage_warning=timeline.get("footage_warning"),
     )

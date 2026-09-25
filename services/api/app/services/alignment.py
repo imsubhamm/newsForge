@@ -24,7 +24,9 @@ def align_script_to_transcript(script: str, transcript: Transcript, max_chars: i
     whisper_words = [word for word in transcript.words if normalize_token(word.text)]
     mapping, match_ratio = _map_tokens(script_tokens, whisper_words)
 
-    if match_ratio < 0.35 and whisper_words:
+    if _unusable_whisper_clocks(script_tokens, whisper_words, match_ratio):
+        token_times = _proportional_token_times(script_tokens, duration)
+    elif match_ratio < 0.35 and whisper_words:
         token_times = _index_mapped_token_times(script_tokens, whisper_words, duration)
     else:
         token_times = _times_for_tokens(script_tokens, mapping, whisper_words, duration)
@@ -139,6 +141,17 @@ def _times_for_tokens(
             times[index] = (cursor, nxt)
             cursor = nxt
     return times
+
+
+def _unusable_whisper_clocks(
+    script_tokens: list[str], words: list[TranscriptWord], match_ratio: float
+) -> bool:
+    """Garbage or sparse ASR clocks cannot drive a news cut."""
+    if not words:
+        return True
+    if match_ratio < 0.35 and len(words) < max(8, int(len(script_tokens) * 0.25)):
+        return True
+    return max(word.end - word.start for word in words) > 8.0
 
 
 def _index_mapped_token_times(

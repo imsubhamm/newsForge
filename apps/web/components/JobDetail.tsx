@@ -3,8 +3,29 @@
 import { useEffect, useState } from "react";
 
 import { JobProgress } from "@/components/JobProgress";
-import { fetchJob, fetchSemanticDebug, mediaUrl, startJobProcess } from "@/lib/api";
-import { TERMINAL_STATUSES, type Job, type SemanticDebug } from "@/lib/types";
+import {
+  fetchJob,
+  fetchSemanticDebug,
+  fetchTimeline,
+  mediaUrl,
+  renderExistingJob,
+  setClipAudioMode,
+  startJobProcess,
+} from "@/lib/api";
+import {
+  TERMINAL_STATUSES,
+  type AudioMode,
+  type Job,
+  type SemanticDebug,
+  type TimelinePlan,
+} from "@/lib/types";
+
+const AUDIO_LABEL: Record<AudioMode, string> = {
+  VOICEOVER_ONLY: "🎙 VO",
+  SOURCE_SOUNDBITE: "🎤 BITE",
+  VOICEOVER_WITH_NAT_SOUND: "🔊 NAT",
+  NAT_SOUND_ONLY: "🔊 NAT",
+};
 
 function formatTime(seconds: number): string {
   const whole = Math.max(0, seconds);
@@ -17,6 +38,7 @@ export function JobDetail({ initial }: { initial: Job }) {
   const [job, setJob] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [debug, setDebug] = useState<SemanticDebug | null>(null);
+  const [timeline, setTimeline] = useState<TimelinePlan | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,8 +49,10 @@ export function JobDetail({ initial }: { initial: Job }) {
           setJob(next);
           if (next.semantic_available) {
             const report = await fetchSemanticDebug(job.id);
+            const plan = await fetchTimeline(job.id);
             if (!cancelled) {
               setDebug(report);
+              setTimeline(plan);
             }
           }
         }
@@ -65,6 +89,26 @@ export function JobDetail({ initial }: { initial: Job }) {
     !job.output_url && (job.status === "UPLOADED" || job.status === "ALIGNED" || job.status === "FAILED");
   const continueLabel = job.status === "ALIGNED" ? "Edit and render" : "Analyse voice";
 
+  async function changeAudio(index: number, mode: AudioMode) {
+    setBusy(true);
+    try {
+      const next = await setClipAudioMode(job.id, index, mode);
+      setTimeline(next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rerender() {
+    setBusy(true);
+    try {
+      const next = await renderExistingJob(job.id);
+      setJob(next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <JobProgress status={job.status} steps={job.steps} error={job.error} />
@@ -83,7 +127,7 @@ export function JobDetail({ initial }: { initial: Job }) {
       {job.weak_match_count ? (
         <p className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-amber-100">
           ⚠ Weak footage match on {job.weak_match_count} cut{job.weak_match_count === 1 ? "" : "s"}.
-          The voice-over stayed on the master clock; review those shots before publishing.
+          Review those shots before publishing.
         </p>
       ) : null}
       {job.footage_warning ? <p className="text-sm text-white/55">{job.footage_warning}</p> : null}
@@ -92,7 +136,7 @@ export function JobDetail({ initial }: { initial: Job }) {
         <section className="rounded-3xl border border-[#e4c36a]/15 bg-[#111827]/80 p-6">
           <h2 className="text-xl">Bengali captions</h2>
           <p className="mt-2 text-sm text-white/50">
-            Timed from the voice-over. Spelling comes from the reporter script, not Whisper.
+            Reporter script captions play with voice-over. Soundbite captions play with original speech.
           </p>
           <ol className="mt-4 space-y-3">
             {job.captions.map((cue) => (
@@ -100,7 +144,10 @@ export function JobDetail({ initial }: { initial: Job }) {
                 <span className="w-28 shrink-0 text-[#e4c36a]">
                   {formatTime(cue.start)}–{formatTime(cue.end)}
                 </span>
-                <span>{cue.text}</span>
+                <span>
+                  {cue.source === "VIDEO_SOUNDBITE" ? "🎤 " : "🎙 "}
+                  {cue.text}
+                </span>
               </li>
             ))}
           </ol>
@@ -111,7 +158,7 @@ export function JobDetail({ initial }: { initial: Job }) {
         <section className="rounded-3xl border border-white/10 bg-[#111827]/70 p-6">
           <h2 className="text-xl">Semantic edit debug</h2>
           <p className="mt-2 text-sm text-white/50">
-            Voice is the master timeline. Cuts are chosen by meaning, not upload order.
+            Visual cuts are chosen by meaning. Audio is a separate editorial decision.
           </p>
           <div className="mt-5 space-y-5">
             {debug.matches.map((match) => (
@@ -132,6 +179,75 @@ export function JobDetail({ initial }: { initial: Job }) {
               </div>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {debug?.audio_matches?.length ? (
+        <section className="rounded-3xl border border-white/10 bg-[#111827]/70 p-6">
+          <h2 className="text-xl">Audio editorial debug</h2>
+          <p className="mt-2 text-sm text-white/50">
+            The planner chooses voice-over, a soundbite, or natural sound. Two speech tracks never play at full level.
+          </p>
+          <div className="mt-5 space-y-5">
+            {debug.audio_matches.map((match) => (
+              <div key={`audio-${match.narration_segment_id}`}>
+                <p className="text-[#e4c36a]">
+                  {formatTime(match.start)}–{formatTime(match.end)} · {match.mode} · {match.action}
+                </p>
+                <p className="mt-1 text-lg">{match.text}</p>
+                <p className="mt-1 text-sm text-white/55">{match.reason}</p>
+                <ul className="mt-2 space-y-1 text-sm text-white/70">
+                  {match.candidates.map((candidate) => (
+                    <li key={candidate.audio_id}>
+                      {candidate.selected ? "→ " : "   "}
+                      {candidate.source_file} · {candidate.speaker_type} · {candidate.relevance.toFixed(2)} /{" "}
+                      {candidate.quality.toFixed(2)} · {candidate.decision}
+                      {candidate.transcript ? ` — “${candidate.transcript}”` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {timeline?.timeline.length ? (
+        <section className="rounded-3xl border border-[#e4c36a]/15 bg-[#111827]/80 p-6">
+          <h2 className="text-xl">Program timeline</h2>
+          <p className="mt-2 text-sm text-white/50">
+            VIDEO and AUDIO are independent. Change an audio block, then re-render.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {timeline.timeline.map((clip, index) => (
+              <div key={`${clip.start}-${clip.source}`} className="min-w-40 rounded-xl border border-white/10 p-3">
+                <div className="text-sm text-[#e4c36a]">
+                  {formatTime(clip.start)}–{formatTime(clip.end)}
+                </div>
+                <div className="mt-1 text-sm text-white/70">{clip.source}</div>
+                <div className="mt-2 text-lg">{AUDIO_LABEL[clip.audio.mode]}</div>
+                <select
+                  className="mt-2 w-full rounded-lg bg-[#070B14] px-2 py-1 text-sm"
+                  value={clip.audio.mode}
+                  disabled={busy}
+                  onChange={(event) => void changeAudio(index, event.target.value as AudioMode)}
+                >
+                  <option value="VOICEOVER_ONLY">Use Voice-over</option>
+                  <option value="SOURCE_SOUNDBITE">Use Original Sound</option>
+                  <option value="VOICEOVER_WITH_NAT_SOUND">Voice-over + Natural Sound</option>
+                  <option value="NAT_SOUND_ONLY">Mute Voice-over / Nat only</option>
+                </select>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => void rerender()}
+            disabled={busy}
+            className="mt-5 rounded-xl bg-[#c41e3a] px-5 py-3 text-[#f6f1e8] disabled:opacity-60"
+          >
+            {busy ? "Working…" : "Re-render with audio edits"}
+          </button>
         </section>
       ) : null}
 

@@ -31,6 +31,16 @@ STOP = {
 }
 LOCATION_MARKERS = ("দুর্গাপুর", "কলকাতা", "মল", "স্টেশন", "রোড", "শহর", "থানা", "বাজার")
 QUOTE_MARKERS = ("জানান", "বলেন", "জানিয়ে", "বিধায়ক", "আধিকারিক")
+SOUNDBITE_MARKERS = (
+    "জানান",
+    "বলেন",
+    "জানিয়ে",
+    "অভিযোগ",
+    "দাবি",
+    "সরব",
+    "হুঁশিয়ারি",
+    "হুঁশিয়ারি",
+)
 
 
 def segment_narration(script: str, alignment: AlignmentResult) -> list[NarrationSegment]:
@@ -62,6 +72,7 @@ def segment_narration(script: str, alignment: AlignmentResult) -> list[Narration
                 actions=_actions(text, kind),
                 location=location,
                 visual_requirements=requirements,
+                audio_intent=_audio_intent(text, kind),
             )
         )
     if segments:
@@ -79,7 +90,7 @@ def _script_sentences(script: str) -> list[str]:
 def _sentence_times(
     sentences: list[str], alignment: AlignmentResult, duration: float
 ) -> list[tuple[str, float, float]]:
-    if not alignment.cues:
+    if not alignment.cues or alignment.match_ratio < 0.35:
         return _proportional_times(sentences, duration)
     remaining = list(alignment.cues)
     windows: list[tuple[str, float, float]] = []
@@ -151,6 +162,17 @@ def _segment_type(text: str, index: int, total: int) -> str:
     if index == total - 1:
         return "close"
     return "event"
+
+
+def _audio_intent(text: str, kind: str) -> str:
+    """Reporter keeps talking unless the line hands the story to a person on camera."""
+    if kind == "hook":
+        return "script"
+    if any(mark in text for mark in SOUNDBITE_MARKERS):
+        return "soundbite"
+    if kind == "quote":
+        return "soundbite"
+    return "script"
 
 
 def _actions(text: str, kind: str) -> list[str]:

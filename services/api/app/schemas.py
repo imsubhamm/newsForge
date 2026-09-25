@@ -5,6 +5,41 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+AudioMode = Literal["VOICEOVER_ONLY", "SOURCE_SOUNDBITE", "VOICEOVER_WITH_NAT_SOUND", "NAT_SOUND_ONLY"]
+AudioType = Literal[
+    "voiceover_candidate",
+    "reporter_standup",
+    "interview",
+    "official_statement",
+    "eyewitness_bite",
+    "local_resident_bite",
+    "reaction",
+    "natural_sound",
+    "ambient_sound",
+    "background_chatter",
+    "irrelevant_speech",
+    "unusable_audio",
+    "soundbite",
+]
+
+
+class ClipAudio(BaseModel):
+    mode: AudioMode = "VOICEOVER_ONLY"
+    voiceover_enabled: bool = True
+    voiceover_start: float | None = None
+    voiceover_end: float | None = None
+    source: str | None = None
+    source_start: float | None = None
+    source_end: float | None = None
+    voice_volume: float = 1.0
+    source_volume: float = 0.0
+    editorial_action: str = "KEEP_VOICEOVER"
+    reason: str = ""
+    audio_segment_id: str = ""
+    needs_review: bool = False
+    override: bool = False
+
+
 class TimelineClip(BaseModel):
     start: float = Field(ge=0)
     end: float = Field(gt=0)
@@ -17,6 +52,7 @@ class TimelineClip(BaseModel):
     needs_review: bool = False
     narration_segment_id: str = ""
     scene_id: str = ""
+    audio: ClipAudio = Field(default_factory=ClipAudio)
 
     @field_validator("source")
     @classmethod
@@ -30,6 +66,7 @@ class CaptionCue(BaseModel):
     start: float = Field(ge=0)
     end: float = Field(gt=0)
     text: str
+    source: Literal["REPORTER_SCRIPT", "VIDEO_SOUNDBITE"] = "REPORTER_SCRIPT"
 
 
 class TimelinePlan(BaseModel):
@@ -103,6 +140,7 @@ class NarrationSegment(BaseModel):
     actions: list[str] = Field(default_factory=list)
     location: str | None = None
     visual_requirements: list[str] = Field(default_factory=list)
+    audio_intent: Literal["script", "soundbite"] = "script"
 
 
 class VisualScene(BaseModel):
@@ -142,12 +180,64 @@ class NarrationMatchDebug(BaseModel):
     candidates: list[SceneCandidate] = Field(default_factory=list)
 
 
+class AudioSegment(BaseModel):
+    id: str
+    source_file: str
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    contains_speech: bool = False
+    transcript: str = ""
+    speaker_type: str = "unknown"
+    audio_type: AudioType = "ambient_sound"
+    speech_quality: float = 0.0
+    information_value: float = 0.0
+    news_relevance: float = 0.0
+    rms: float = 0.0
+    peak: float = 0.0
+    playback_gain: float = 1.0
+
+
+class AudioComparison(BaseModel):
+    audio_id: str
+    semantic_relevance: float = 0.0
+    information_overlap: float = 0.0
+    unique_information: float = 0.0
+    evidence_value: float = 0.0
+    speaker_value: float = 0.0
+    audio_quality: float = 0.0
+
+
+class AudioCandidateDebug(BaseModel):
+    audio_id: str
+    source_file: str
+    speaker_type: str = "unknown"
+    audio_type: str = ""
+    transcript: str = ""
+    relevance: float = 0.0
+    quality: float = 0.0
+    decision: str = "MUTE"
+    action: str = ""
+    selected: bool = False
+
+
+class AudioMatchDebug(BaseModel):
+    narration_segment_id: str
+    text: str
+    start: float
+    end: float
+    mode: AudioMode = "VOICEOVER_ONLY"
+    action: str = "KEEP_VOICEOVER"
+    reason: str = ""
+    candidates: list[AudioCandidateDebug] = Field(default_factory=list)
+
+
 class SemanticDebug(BaseModel):
     duration: float
     threshold: float
     narration: list[NarrationSegment] = Field(default_factory=list)
     scenes: list[VisualScene] = Field(default_factory=list)
     matches: list[NarrationMatchDebug] = Field(default_factory=list)
+    audio_matches: list[AudioMatchDebug] = Field(default_factory=list)
 
 
 class JobAsset(BaseModel):
@@ -172,8 +262,14 @@ class JobResponse(BaseModel):
     transcript_available: bool = False
     alignment_available: bool = False
     semantic_available: bool = False
+    audio_available: bool = False
     weak_match_count: int = 0
     footage_warning: str | None = None
+
+
+class AudioOverrideRequest(BaseModel):
+    clip_index: int = Field(ge=0)
+    mode: AudioMode
 
 
 class JobListResponse(BaseModel):

@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     match_threshold: float = 0.45
     target_cut_min: float = 2.0
     target_cut_max: float = 6.0
+    nat_sound_volume: float = 0.18
+    audio_fade_ms: int = 200
+    bite_quality_min: float = 0.4
+    bite_relevance_min: float = 0.62
+    bite_overlap_replace: float = 0.55
+    bite_unique_insert: float = 0.55
 
     max_upload_bytes: int = 2 * 1024 * 1024 * 1024
     allowed_audio_suffixes: tuple[str, ...] = (".mp3", ".wav", ".m4a")

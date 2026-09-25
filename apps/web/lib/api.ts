@@ -1,4 +1,4 @@
-import type { Job, SemanticDebug } from "./types";
+import type { AudioMode, Job, SemanticDebug, TimelinePlan } from "./types";
 
 export function apiOrigin(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -103,6 +103,34 @@ export async function fetchSemanticDebug(id: string): Promise<SemanticDebug | nu
   const response = await fetch(apiUrl(`/api/jobs/${id}/semantic-debug`), { cache: "no-store" });
   if (!response.ok) {
     return null;
+  }
+  return response.json();
+}
+
+export async function fetchTimeline(id: string): Promise<TimelinePlan | null> {
+  const response = await fetch(apiUrl(`/api/jobs/${id}/timeline`), { cache: "no-store" });
+  if (!response.ok) {
+    return null;
+  }
+  return response.json();
+}
+
+export async function setClipAudioMode(id: string, clipIndex: number, mode: AudioMode): Promise<TimelinePlan> {
+  const response = await fetch(apiUrl(`/api/jobs/${id}/audio-mode`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clip_index: clipIndex, mode }),
+  });
+  if (!response.ok) {
+    throw new Error("Could not update the audio block");
+  }
+  return response.json();
+}
+
+export async function renderExistingJob(id: string): Promise<Job> {
+  const response = await fetch(apiUrl(`/api/jobs/${id}/render`), { method: "POST" });
+  if (!response.ok) {
+    throw new Error("Could not start render");
   }
   return response.json();
 }
