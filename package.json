@@ -1,0 +1,11 @@
+{
+  "name": "bangla-news-ai-editor",
+  "private": true,
+  "description": "Local-first AI news-video editor for Bengali news reels",
+  "scripts": {
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev:studio": "npm --prefix video run studio",
+    "render:sample": "bash scripts/render-sample.sh",
+    "generate:sample": "bash scripts/generate-sample-assets.sh"
+  }
+}

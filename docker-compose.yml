@@ -1,0 +1,30 @@
+# Local development helpers. The MVP itself runs natively on macOS.
+# Cloud/S3 deployment can replace the storage volume later.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      STORAGE_PATH: /app/storage
+      DATABASE_URL: sqlite:////app/data/news_editor.db
+      MOCK_AI: "true"
+      AI_PROVIDER: openai
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api

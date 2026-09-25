@@ -1,0 +1,19 @@
+{
+  "name": "bangla-news-video",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts NewsVideo"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.409",
+    "@remotion/media-utils": "4.0.409",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "remotion": "4.0.409"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.13",
+    "typescript": "^5.9.2"
+  }
+}

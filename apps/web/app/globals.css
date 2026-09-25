@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #080d16;
+  --panel: #111827;
+  --line: rgba(228, 195, 106, 0.18);
+  --red: #c41e3a;
+  --gold: #e4c36a;
+  --paper: #f6f1e8;
+}
+
+html,
+body {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top right, rgba(196, 30, 58, 0.18), transparent 32%),
+    linear-gradient(180deg, #0b1220 0%, #080d16 100%);
+  color: var(--paper);
+}
+
+body {
+  font-family: "Noto Sans Bengali", "Iowan Old Style", Georgia, sans-serif;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+::file-selector-button {
+  font: inherit;
+}
+
+.field {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(246, 241, 232, 0.12);
+  background: rgba(8, 13, 22, 0.72);
+  padding: 0.9rem 1rem;
+  color: #f6f1e8;
+  outline: none;
+}
+
+.field:focus {
+  border-color: rgba(228, 195, 106, 0.55);
+}

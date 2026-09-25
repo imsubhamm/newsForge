@@ -1,0 +1,62 @@
+{
+  "headline": "দুর্গাপুরের মলে হঠাৎ হনুমান",
+  "location": "দুর্গাপুর",
+  "reporterName": "রিয়া সেন",
+  "duration": 8.0,
+  "cropMode": "blur-background",
+  "audioSrc": "/jobs/sample-demo/voice.mp3",
+  "logoSrc": "/jobs/sample-demo/logo.png",
+  "clips": [
+    {
+      "start": 0.0,
+      "end": 3.2,
+      "src": "/jobs/sample-demo/footage/clip01.mp4",
+      "sourceStart": 1.0,
+      "sourceEnd": 4.2,
+      "cropMode": "blur-background"
+    },
+    {
+      "start": 3.2,
+      "end": 6.2,
+      "src": "/jobs/sample-demo/footage/clip02.mp4",
+      "sourceStart": 0.4,
+      "sourceEnd": 3.4,
+      "cropMode": "blur-background"
+    },
+    {
+      "start": 6.2,
+      "end": 8.0,
+      "src": "/jobs/sample-demo/footage/clip03.mp4",
+      "sourceStart": 1.0,
+      "sourceEnd": 2.8,
+      "cropMode": "blur-background"
+    }
+  ],
+  "captions": [
+    {
+      "start": 0.0,
+      "end": 2.0,
+      "text": "পুজোর বাজারে ঘটল"
+    },
+    {
+      "start": 2.0,
+      "end": 3.6,
+      "text": "এক অদ্ভুত ঘটনা"
+    },
+    {
+      "start": 3.6,
+      "end": 5.4,
+      "text": "মলে হঠাৎ হনুমান"
+    },
+    {
+      "start": 5.4,
+      "end": 6.8,
+      "text": "কেনাকাটা থেমে যায়"
+    },
+    {
+      "start": 6.8,
+      "end": 8.0,
+      "text": "কর্তৃপক্ষ পৌঁছায়"
+    }
+  ]
+}

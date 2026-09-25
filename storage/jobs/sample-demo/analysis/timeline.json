@@ -1,0 +1,61 @@
+{
+  "headline": "দুর্গাপুরের মলে হঠাৎ হনুমান",
+  "location": "দুর্গাপুর",
+  "reporter_name": "রিয়া সেন",
+  "duration": 8.0,
+  "crop_mode": "blur-background",
+  "footage_warning": null,
+  "timeline": [
+    {
+      "start": 0.0,
+      "end": 3.2,
+      "source": "clip01.mp4",
+      "source_start": 1.0,
+      "source_end": 4.2,
+      "reason": "Mall exterior establishes the location."
+    },
+    {
+      "start": 3.2,
+      "end": 6.2,
+      "source": "clip02.mp4",
+      "source_start": 0.4,
+      "source_end": 3.4,
+      "reason": "Crowd and interior context for the incident."
+    },
+    {
+      "start": 6.2,
+      "end": 8.0,
+      "source": "clip03.mp4",
+      "source_start": 1.0,
+      "source_end": 2.8,
+      "reason": "Security presence closes the story."
+    }
+  ],
+  "captions": [
+    {
+      "start": 0.0,
+      "end": 2.0,
+      "text": "পুজোর বাজারে ঘটল"
+    },
+    {
+      "start": 2.0,
+      "end": 3.6,
+      "text": "এক অদ্ভুত ঘটনা"
+    },
+    {
+      "start": 3.6,
+      "end": 5.4,
+      "text": "মলে হঠাৎ হনুমান"
+    },
+    {
+      "start": 5.4,
+      "end": 6.8,
+      "text": "কেনাকাটা থেমে যায়"
+    },
+    {
+      "start": 6.8,
+      "end": 8.0,
+      "text": "কর্তৃপক্ষ পৌঁছায়"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "sample-demo",
+  "title": "দুর্গাপুরের মলে হঠাৎ হনুমান",
+  "location": "দুর্গাপুর",
+  "reporter_name": "রিয়া সেন",
+  "status": "UPLOADED",
+  "crop_mode": "center-crop",
+  "voice": "voice.mp3",
+  "logo": "logo.png",
+  "script_path": "script.txt",
+  "footage": [
+    {"id": "clip01", "filename": "clip01.mp4"},
+    {"id": "clip02", "filename": "clip02.mp4"},
+    {"id": "clip03", "filename": "clip03.mp4"}
+  ]
+}
