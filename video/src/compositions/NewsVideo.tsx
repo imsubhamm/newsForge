@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AbsoluteFill, Audio, Sequence, useVideoConfig } from "remotion";
 
 import { BengaliCaptions } from "../components/BengaliCaptions";
+import { ClipAudioTracks } from "../components/ClipAudioTracks";
 import { BreakingNewsBanner } from "../components/BreakingNewsBanner";
 import { ChannelLogo } from "../components/ChannelLogo";
 import { HeadlineBanner } from "../components/HeadlineBanner";
@@ -43,6 +44,7 @@ export function NewsVideo({
               fps={fps}
               cropMode={clip.cropMode ?? cropMode}
             />
+            <ClipAudioTracks clip={clip} voiceSrc={audioSrc} durationInFrames={durationInFrames} />
           </Sequence>
         );
       })}
@@ -62,7 +64,7 @@ export function NewsVideo({
       <BengaliCaptions captions={captions} />
       <Outro />
 
-      {audioSrc ? <Audio src={mediaSrc(audioSrc)} volume={1} /> : null}
+      {!clips.some((clip) => clip.audio) && audioSrc ? <Audio src={mediaSrc(audioSrc)} volume={1} /> : null}
     </AbsoluteFill>
   );
 }

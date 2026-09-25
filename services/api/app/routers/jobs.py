@@ -6,12 +6,28 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import get_db
-from app.schemas import AlignmentResult, JobListResponse, JobResponse, SemanticDebug, TimelinePlan, Transcript
+from app.schemas import (
+    AlignmentResult,
+    AudioOverrideRequest,
+    JobListResponse,
+    JobResponse,
+    SemanticDebug,
+    TimelinePlan,
+    Transcript,
+)
 from app.models import JobStatus
 from app.services.jobs import JobServiceError, get_job, list_jobs, load_timeline, save_timeline, set_job_status
 from app.services.jobs import create_job as create_job_record
 from app.services.paths import UnsafePathError, job_dir
-from app.services.pipeline import load_alignment, load_semantic_debug, load_transcript, next_process_status, process_job
+from app.services.audio_planner import apply_audio_override
+from app.services.pipeline import (
+    load_alignment,
+    load_semantic_debug,
+    load_transcript,
+    next_process_status,
+    process_job,
+    render_existing_job,
+)
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -133,6 +149,39 @@ def update_timeline(
         return save_timeline(settings, job_id, plan)
     except (JobServiceError, UnsafePathError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{job_id}/audio-mode", response_model=TimelinePlan)
+def override_audio_mode(
+    job_id: str,
+    body: AudioOverrideRequest,
+    settings: Settings = Depends(settings_dep),
+) -> TimelinePlan:
+    try:
+        plan = load_timeline(settings, job_id)
+        updated = apply_audio_override(plan, body.clip_index, body.mode, settings)
+        return save_timeline(settings, job_id, updated)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (JobServiceError, UnsafePathError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{job_id}/render", response_model=JobResponse)
+def start_render_only(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(settings_dep),
+) -> JobResponse:
+    try:
+        get_job(db, settings, job_id)
+        load_timeline(settings, job_id)
+    except (JobServiceError, UnsafePathError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    set_job_status(db, settings, job_id, JobStatus.RENDERING, error=None)
+    background_tasks.add_task(render_existing_job, job_id)
+    return get_job(db, settings, job_id)
 
 
 @router.get("/{job_id}/output")

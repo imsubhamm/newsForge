@@ -9,7 +9,7 @@ from app.ai.provider import get_ai_provider
 from app.config import Settings, get_settings
 from app.db import SessionLocal
 from app.models import JobStatus
-from app.schemas import AlignmentResult, SemanticDebug, TimelinePlan, Transcript
+from app.schemas import AlignmentResult, AudioSegment, SemanticDebug, TimelinePlan, Transcript
 from app.services.alignment import align_script_to_transcript
 from app.services.footage import FootageError, analyse_footage
 from app.services.jobs import find_voice, set_job_status, write_json
@@ -17,9 +17,11 @@ from app.services.narration import segment_narration
 from app.services.paths import job_dir
 from app.services.render import RenderError, render_job
 from app.services.scenes import detect_scenes
+from app.services.audio_planner import apply_audio_editorial, attach_audio_debug
 from app.services.semantic_planner import build_semantic_plan
 from app.services.timeline_builder import TimelineBuildError
 from app.services.transcription import TranscriptionError, transcribe_voice
+from app.services.video_audio import analyse_video_audio
 
 logger = logging.getLogger("bangla.news")
 
@@ -84,6 +86,12 @@ def process_job(job_id: str) -> None:
         write_json(root / "analysis" / "scenes.json", {"scenes": [scene.model_dump() for scene in scenes]})
         narration = segment_narration(script, alignment)
         write_json(root / "analysis" / "narration.json", {"segments": [item.model_dump() for item in narration]})
+        audio_path = root / "analysis" / "video_audio.json"
+        if audio_path.exists():
+            audio_segments = [AudioSegment.model_validate(item) for item in _read_json(audio_path).get("segments") or []]
+        else:
+            audio_segments = analyse_video_audio(root, footage, settings, script)
+            write_json(audio_path, {"segments": [item.model_dump() for item in audio_segments]})
         logger.info(
             "scenes analysed",
             extra={
@@ -101,10 +109,13 @@ def process_job(job_id: str) -> None:
             "alignment": alignment.model_dump(),
             "narration": [item.model_dump() for item in narration],
             "scenes": [scene.model_dump() for scene in scenes],
+            "audio_segments": [item.model_dump() for item in audio_segments],
         }
         raw_plan = get_ai_provider(settings).build_timeline(payload)
         plan = TimelinePlan.model_validate(raw_plan)
         _, debug = build_semantic_plan(payload, settings)
+        plan, audio_debug = apply_audio_editorial(plan, narration, audio_segments, alignment, settings)
+        debug = attach_audio_debug(debug, audio_debug)
         write_json(root / "analysis" / "timeline.json", plan.model_dump())
         write_json(root / "analysis" / "semantic_debug.json", debug.model_dump())
         logger.info(
@@ -165,6 +176,20 @@ def load_alignment(settings: Settings, job_id: str) -> AlignmentResult | None:
     if not path.exists():
         return None
     return AlignmentResult.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def render_existing_job(job_id: str) -> None:
+    settings = get_settings()
+    db = SessionLocal()
+    try:
+        root = job_dir(settings.jobs_dir, job_id)
+        set_job_status(db, settings, job_id, JobStatus.RENDERING, error=None)
+        render_job(root, settings)
+        set_job_status(db, settings, job_id, JobStatus.COMPLETED, error=None)
+    except Exception as exc:
+        set_job_status(db, settings, job_id, JobStatus.FAILED, error=_public_error(exc))
+    finally:
+        db.close()
 
 
 def next_process_status(root: Path) -> JobStatus:

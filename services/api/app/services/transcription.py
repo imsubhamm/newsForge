@@ -30,13 +30,22 @@ class TranscriptionError(RuntimeError):
 
 
 def transcribe_voice(audio_path: Path, settings: Settings, script: str | None = None) -> Transcript:
-    if not audio_path.exists():
-        raise TranscriptionError("voice-over file is missing")
+    return transcribe_media(audio_path, settings, script=script)
+
+
+def transcribe_media(
+    media_path: Path,
+    settings: Settings,
+    script: str | None = None,
+    wav_path: Path | None = None,
+) -> Transcript:
+    if not media_path.exists():
+        raise TranscriptionError("media file is missing")
     if settings.mock_whisper:
-        return _mock_transcript(audio_path)
+        return _mock_transcript(media_path)
 
     pin_huggingface_cache()
-    wav = _ensure_wav(audio_path)
+    wav = _ensure_wav(media_path, wav_path)
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
@@ -113,10 +122,11 @@ def _load_model(settings: Settings, whisper_cls):
     return _model
 
 
-def _ensure_wav(path: Path) -> Path:
-    if path.suffix.lower() == ".wav":
+def _ensure_wav(path: Path, wav_path: Path | None = None) -> Path:
+    if wav_path is None and path.suffix.lower() == ".wav":
         return path
-    wav = path.with_name("voice-16k.wav")
+    wav = wav_path or path.with_name("voice-16k.wav")
+    wav.parent.mkdir(parents=True, exist_ok=True)
     if wav.exists() and wav.stat().st_mtime >= path.stat().st_mtime:
         return wav
     command = [

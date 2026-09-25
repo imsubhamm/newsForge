@@ -54,6 +54,17 @@ def render_job(root: Path, settings: Settings) -> Path:
                 "sourceStart": clip.source_start,
                 "sourceEnd": clip.source_end,
                 "cropMode": clip.crop_mode or plan.crop_mode,
+                "audio": {
+                    "mode": clip.audio.mode,
+                    "voiceoverEnabled": clip.audio.voiceover_enabled,
+                    "voiceoverStart": clip.audio.voiceover_start,
+                    "voiceoverEnd": clip.audio.voiceover_end,
+                    "source": f"{prefix}/footage/{clip.audio.source}" if clip.audio.source else None,
+                    "sourceStart": clip.audio.source_start,
+                    "sourceEnd": clip.audio.source_end,
+                    "voiceVolume": clip.audio.voice_volume,
+                    "sourceVolume": clip.audio.source_volume,
+                },
             }
             for clip in plan.timeline
         ],

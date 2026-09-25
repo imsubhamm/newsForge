@@ -1,5 +1,17 @@
 export type CropMode = "center-crop" | "blur-background" | "fit";
 
+export type ClipAudio = {
+  mode?: "VOICEOVER_ONLY" | "SOURCE_SOUNDBITE" | "VOICEOVER_WITH_NAT_SOUND" | "NAT_SOUND_ONLY";
+  voiceoverEnabled?: boolean;
+  voiceoverStart?: number | null;
+  voiceoverEnd?: number | null;
+  source?: string | null;
+  sourceStart?: number | null;
+  sourceEnd?: number | null;
+  voiceVolume?: number;
+  sourceVolume?: number;
+};
+
 export type TimelineClip = {
   start: number;
   end: number;
@@ -7,6 +19,7 @@ export type TimelineClip = {
   sourceStart: number;
   sourceEnd: number;
   cropMode?: CropMode;
+  audio?: ClipAudio;
 };
 
 export type CaptionCue = {

@@ -1,0 +1,194 @@
+from app.config import get_settings
+from app.schemas import AlignmentResult, AudioSegment, CaptionCue, NarrationSegment, TimelineClip, TimelinePlan
+from app.services.audio_planner import apply_audio_editorial
+
+
+def _clip(start: float, end: float, source: str, narration_id: str, source_start: float = 0.0) -> TimelineClip:
+    span = end - start
+    return TimelineClip(
+        start=start,
+        end=end,
+        source=source,
+        source_start=source_start,
+        source_end=round(source_start + span, 3),
+        narration_segment_id=narration_id,
+        crop_mode="blur-background",
+    )
+
+
+def _audio(**kwargs) -> AudioSegment:
+    return AudioSegment.model_validate(kwargs)
+
+
+def test_audio_planner_uses_vo_bite_nat_and_mutes_irrelevant_speech() -> None:
+    narration = [
+        NarrationSegment(
+            id="narration_01",
+            start=0.0,
+            end=6.0,
+            text="টানা বৃষ্টিতে বাড়ছে নদীর জলস্তর।",
+            type="event",
+        ),
+        NarrationSegment(
+            id="narration_02",
+            start=6.0,
+            end=14.0,
+            text="তিন দিন ধরে এখানে জল জমে আছে এবং বাসিন্দারা কষ্টে আছেন।",
+            type="event",
+        ),
+        NarrationSegment(
+            id="narration_03",
+            start=14.0,
+            end=20.0,
+            text="সেচ দপ্তর পরিস্থিতি পর্যবেক্ষণ করছে।",
+            type="close",
+        ),
+    ]
+    plan = TimelinePlan(
+        headline="দুর্গাপুরে জল",
+        location="দুর্গাপুর",
+        duration=20.0,
+        timeline=[
+            _clip(0, 6, "video01.mp4", "narration_01"),
+            _clip(6, 14, "video03.mp4", "narration_02"),
+            _clip(14, 20, "video06.mp4", "narration_03"),
+        ],
+        captions=[CaptionCue(start=0, end=20, text="টানা বৃষ্টিতে বাড়ছে নদীর জলস্তর")],
+    )
+    segments = [
+        _audio(
+            id="audio_video01_01",
+            source_file="video01.mp4",
+            start=0.0,
+            end=8.0,
+            contains_speech=False,
+            transcript="",
+            speaker_type="environment",
+            audio_type="natural_sound",
+            speech_quality=0.0,
+            information_value=0.2,
+            news_relevance=0.4,
+            rms=0.06,
+            peak=0.4,
+            playback_gain=1.0,
+        ),
+        _audio(
+            id="audio_video02_01",
+            source_file="video02.mp4",
+            start=2.0,
+            end=6.0,
+            contains_speech=True,
+            transcript="চা খান তাহলে চলুন বাজারে যাই",
+            speaker_type="unknown",
+            audio_type="irrelevant_speech",
+            speech_quality=0.8,
+            information_value=0.05,
+            news_relevance=0.04,
+            rms=0.07,
+            peak=0.5,
+            playback_gain=1.0,
+        ),
+        _audio(
+            id="audio_video03_01",
+            source_file="video03.mp4",
+            start=0.0,
+            end=4.0,
+            contains_speech=False,
+            transcript="",
+            speaker_type="environment",
+            audio_type="ambient_sound",
+            rms=0.01,
+        ),
+        _audio(
+            id="audio_video04_01",
+            source_file="video04.mp4",
+            start=12.2,
+            end=21.8,
+            contains_speech=True,
+            transcript="তিন দিন ধরে এখানে জল জমে আছে",
+            speaker_type="local_resident",
+            audio_type="local_resident_bite",
+            speech_quality=0.83,
+            information_value=0.91,
+            news_relevance=0.94,
+            rms=0.08,
+            peak=0.5,
+            playback_gain=1.0,
+        ),
+        _audio(
+            id="audio_video05_01",
+            source_file="video05.mp4",
+            start=3.0,
+            end=9.0,
+            contains_speech=True,
+            transcript="আমি দুর্গাপুর ব্যারেজে দাঁড়িয়ে এই মুহূর্তে",
+            speaker_type="reporter",
+            audio_type="reporter_standup",
+            speech_quality=0.88,
+            information_value=0.4,
+            news_relevance=0.2,
+            rms=0.07,
+            peak=0.45,
+            playback_gain=1.0,
+        ),
+        _audio(
+            id="audio_video06_01",
+            source_file="video06.mp4",
+            start=1.0,
+            end=5.0,
+            contains_speech=True,
+            transcript="এই শব্দটা কাজের না",
+            speaker_type="unknown",
+            audio_type="unusable_audio",
+            speech_quality=0.15,
+            news_relevance=0.02,
+            rms=0.01,
+        ),
+    ]
+    alignment = AlignmentResult(
+        duration=20.0,
+        cues=[
+            CaptionCue(start=0, end=6, text="টানা বৃষ্টিতে বাড়ছে নদীর জলস্তর।"),
+            CaptionCue(start=6, end=14, text="তিন দিন ধরে এখানে জল জমে আছে।"),
+            CaptionCue(start=14, end=20, text="সেচ দপ্তর পরিস্থিতি পর্যবেক্ষণ করছে।"),
+        ],
+    )
+
+    result, debug = apply_audio_editorial(plan, narration, segments, alignment, get_settings())
+    modes = [clip.audio.mode for clip in result.timeline]
+    assert "VOICEOVER_WITH_NAT_SOUND" in modes
+    assert "SOURCE_SOUNDBITE" in modes
+    assert "VOICEOVER_ONLY" in modes
+
+    bite = next(clip for clip in result.timeline if clip.audio.mode == "SOURCE_SOUNDBITE")
+    assert bite.source == "video04.mp4"
+    assert bite.source_start == 12.2
+    assert bite.audio.voice_volume == 0
+    assert bite.audio.source_volume > 0
+    assert bite.audio.editorial_action == "REPLACE_VOICEOVER"
+    assert bite.audio.voiceover_enabled is False
+
+    mixed = next(clip for clip in result.timeline if clip.audio.mode == "VOICEOVER_WITH_NAT_SOUND")
+    assert mixed.audio.voice_volume == 1
+    assert 0.09 <= mixed.audio.source_volume <= 0.25
+    assert mixed.audio.voiceover_enabled is True
+
+    voice_only = next(clip for clip in result.timeline if clip.audio.mode == "VOICEOVER_ONLY")
+    assert voice_only.audio.source_volume == 0
+
+    used_audio = {clip.audio.audio_segment_id for clip in result.timeline}
+    assert "audio_video02_01" not in used_audio
+    assert "audio_video06_01" not in used_audio
+
+    muted = [candidate for row in debug for candidate in row.candidates if candidate.audio_id == "audio_video02_01"]
+    assert muted
+    assert all(item.decision == "MUTE" for item in muted)
+
+    bite_caption = next(cue for cue in result.captions if cue.source == "VIDEO_SOUNDBITE")
+    assert "জল জমে" in bite_caption.text
+    assert all(
+        not (clip.audio.voice_volume > 0.4 and clip.audio.source_volume > 0.35)
+        for clip in result.timeline
+    )
+    assert abs(result.timeline[0].start) < 0.01
+    assert abs(result.timeline[-1].end - result.duration) < 0.05
