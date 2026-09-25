@@ -41,7 +41,6 @@ props = {
     "duration": plan["duration"],
     "cropMode": plan.get("crop_mode", "center-crop"),
     "audioSrc": f"{prefix}/voice.mp3",
-    "bedSrc": "/audio/news-bed.mp3",
     "logoSrc": f"{prefix}/logo.png" if (job / "logo.png").exists() else None,
     "clips": [
         {

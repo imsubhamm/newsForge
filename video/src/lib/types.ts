@@ -35,7 +35,7 @@ export const defaultNewsProps: NewsVideoProps = {
   duration: 8,
   cropMode: "center-crop",
   audioSrc: "",
-  bedSrc: "/audio/news-bed.mp3",
+  bedSrc: null,
   logoSrc: "/logo/channel.png",
   clips: [],
   captions: [],
