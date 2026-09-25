@@ -19,7 +19,6 @@ export function NewsVideo({
   reporterName,
   cropMode,
   audioSrc,
-  bedSrc,
   logoSrc,
   clips,
   captions,
@@ -63,7 +62,6 @@ export function NewsVideo({
       <BengaliCaptions captions={captions} />
       <Outro />
 
-      {bedSrc ? <Audio src={mediaSrc(bedSrc)} loop volume={0.24} /> : null}
       {audioSrc ? <Audio src={mediaSrc(audioSrc)} volume={1} /> : null}
     </AbsoluteFill>
   );

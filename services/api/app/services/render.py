@@ -37,7 +37,6 @@ def render_job(root: Path, settings: Settings) -> Path:
     if logo is not None:
         shutil.copy2(logo, public_job / logo.name)
 
-    bed = ensure_news_bed(video_dir)
     prefix = f"/jobs/{job_id}"
     props = {
         "headline": plan.headline,
@@ -46,7 +45,6 @@ def render_job(root: Path, settings: Settings) -> Path:
         "duration": plan.duration,
         "cropMode": plan.crop_mode,
         "audioSrc": f"{prefix}/{voice.name}",
-        "bedSrc": f"/audio/{bed.name}",
         "logoSrc": f"{prefix}/{logo.name}" if logo is not None else None,
         "clips": [
             {
