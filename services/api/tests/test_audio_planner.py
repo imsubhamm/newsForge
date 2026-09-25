@@ -1,6 +1,7 @@
 from app.config import get_settings
 from app.schemas import AlignmentResult, AudioSegment, CaptionCue, NarrationSegment, TimelineClip, TimelinePlan
 from app.services.audio_planner import apply_audio_editorial
+from app.services.narration import _audio_intent
 
 
 def _clip(start: float, end: float, source: str, narration_id: str, source_start: float = 0.0) -> TimelineClip:
@@ -156,9 +157,9 @@ def test_audio_planner_uses_vo_bite_nat_and_mutes_irrelevant_speech() -> None:
 
     result, debug = apply_audio_editorial(plan, narration, segments, alignment, get_settings())
     modes = [clip.audio.mode for clip in result.timeline]
-    assert "VOICEOVER_WITH_NAT_SOUND" in modes
     assert "SOURCE_SOUNDBITE" in modes
     assert "VOICEOVER_ONLY" in modes
+    assert "VOICEOVER_WITH_NAT_SOUND" not in modes
 
     bite = next(clip for clip in result.timeline if clip.audio.mode == "SOURCE_SOUNDBITE")
     assert bite.source == "video04.mp4"
@@ -168,13 +169,9 @@ def test_audio_planner_uses_vo_bite_nat_and_mutes_irrelevant_speech() -> None:
     assert bite.audio.editorial_action == "REPLACE_VOICEOVER"
     assert bite.audio.voiceover_enabled is False
 
-    mixed = next(clip for clip in result.timeline if clip.audio.mode == "VOICEOVER_WITH_NAT_SOUND")
-    assert mixed.audio.voice_volume == 1
-    assert 0.09 <= mixed.audio.source_volume <= 0.25
-    assert mixed.audio.voiceover_enabled is True
-
-    voice_only = next(clip for clip in result.timeline if clip.audio.mode == "VOICEOVER_ONLY")
-    assert voice_only.audio.source_volume == 0
+    voice_only = [clip for clip in result.timeline if clip.audio.mode == "VOICEOVER_ONLY"]
+    assert voice_only
+    assert all(clip.audio.source_volume == 0 and clip.audio.voice_volume == 1 for clip in voice_only)
 
     used_audio = {clip.audio.audio_segment_id for clip in result.timeline}
     assert "audio_video02_01" not in used_audio
@@ -186,9 +183,78 @@ def test_audio_planner_uses_vo_bite_nat_and_mutes_irrelevant_speech() -> None:
 
     bite_caption = next(cue for cue in result.captions if cue.source == "VIDEO_SOUNDBITE")
     assert "জল জমে" in bite_caption.text
-    assert all(
-        not (clip.audio.voice_volume > 0.4 and clip.audio.source_volume > 0.35)
-        for clip in result.timeline
-    )
+    assert all(not (clip.audio.voice_volume > 0 and clip.audio.source_volume > 0) for clip in result.timeline)
     assert abs(result.timeline[0].start) < 0.01
     assert abs(result.timeline[-1].end - result.duration) < 0.05
+
+
+def test_script_intent_inserts_field_voice_without_transcript() -> None:
+    narration = [
+        NarrationSegment(
+            id="narration_01",
+            start=0.0,
+            end=5.0,
+            text="জলমগ্ন বীরভানপুরে স্থানীয়দের অভিযোগ, জল নামছে না।",
+            type="event",
+            audio_intent="soundbite",
+        ),
+        NarrationSegment(
+            id="narration_02",
+            start=5.0,
+            end=9.0,
+            text="রাস্তায় যান চলাচল ব্যাহত।",
+            type="event",
+            audio_intent="script",
+        ),
+    ]
+    plan = TimelinePlan(
+        headline="বীরভানপুর",
+        duration=9.0,
+        timeline=[
+            _clip(0, 5, "clip01.mov", "narration_01"),
+            _clip(5, 9, "clip03.mov", "narration_02"),
+        ],
+    )
+    segments = [
+        _audio(
+            id="audio_clip02_01",
+            source_file="clip02.mov",
+            start=14.0,
+            end=20.0,
+            contains_speech=True,
+            transcript="",
+            speaker_type="on_camera",
+            audio_type="soundbite",
+            speech_quality=0.7,
+            information_value=0.55,
+            news_relevance=0.4,
+            rms=0.08,
+            peak=0.5,
+            playback_gain=1.0,
+        )
+    ]
+    alignment = AlignmentResult(
+        duration=9.0,
+        cues=[CaptionCue(start=0, end=5, text=narration[0].text), CaptionCue(start=5, end=9, text=narration[1].text)],
+    )
+    result, debug = apply_audio_editorial(plan, narration, segments, alignment, get_settings())
+    modes = [clip.audio.mode for clip in result.timeline]
+    assert modes[0] == "VOICEOVER_ONLY"
+    assert modes[1] == "SOURCE_SOUNDBITE"
+    assert result.timeline[1].source == "clip02.mov"
+    assert result.timeline[1].audio.voice_volume == 0
+    assert result.timeline[1].audio.source_volume > 0
+    assert result.timeline[2].audio.mode == "VOICEOVER_ONLY"
+    assert result.timeline[2].audio.source_volume == 0
+    assert debug[0].action == "INSERT_AFTER"
+
+
+def test_script_cues_decide_when_to_throw_to_field_voice() -> None:
+    assert _audio_intent("দুর্গাপুর: টানা বৃষ্টিতে জলমগ্ন বীরভানপুর।", "hook") == "script"
+    assert _audio_intent("একাধিক বাড়ির উঠোন পেরিয়ে জল ঢুকেছে ঘরের ভিতরেও।", "event") == "script"
+    assert _audio_intent("দিনের পর দিন জল জমে থাকায় সমস্যায় পড়েছেন বাসিন্দারা।", "event") == "script"
+    assert _audio_intent("স্থানীয়দের অভিযোগ, নিকাশি ব্যবস্থা বেহাল।", "event") == "soundbite"
+    assert _audio_intent("একাধিকবার প্রশাসনকে জানানো হলেও সমাধান হয়নি বলে দাবি তাঁদের।", "quote") == "soundbite"
+    assert _audio_intent("জল সমস্যার দ্রুত সমাধানের দাবিতে সরব হন তাঁরা।", "event") == "soundbite"
+    assert _audio_intent("বাঁকুড়া-দুর্গাপুর সড়কে যান চলাচল ব্যাহত হয়।", "event") == "script"
+    assert _audio_intent("দ্রুত সমাধান না হলে বৃহত্তর আন্দোলনের হুঁশিয়ারি দিয়েছেন বিক্ষোভকারীরা।", "close") == "soundbite"

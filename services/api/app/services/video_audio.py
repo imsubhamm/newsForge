@@ -25,10 +25,16 @@ def analyse_video_audio(root: Path, footage: dict, settings: Settings, script: s
         except TranscriptionError:
             transcript = None
         speech = list(transcript.segments) if transcript else []
-        if speech:
-            for part_index, part in enumerate(speech, start=1):
+        usable = [
+            part
+            for part in speech
+            if _bengali_ratio(part.text or "") >= 0.45 and (part.end - part.start) >= 1.2
+        ]
+        islands = _speech_islands(source, float(clip.get("duration") or 0))
+        if usable:
+            for part_index, part in enumerate(usable, start=1):
                 text = (part.text or "").strip()
-                quality = _speech_quality(levels, bool(text))
+                quality = _speech_quality(levels, True)
                 audio_type, speaker = classify_audio(text, script, quality, speech=True)
                 relevance = _script_overlap(text, script)
                 segments.append(
@@ -49,12 +55,37 @@ def analyse_video_audio(root: Path, footage: dict, settings: Settings, script: s
                         playback_gain=_playback_gain(levels),
                     )
                 )
+        elif islands:
+            for part_index, (start, end) in enumerate(islands, start=1):
+                span = end - start
+                if span < 2.2:
+                    continue
+                take_end = start + min(span, 8.0)
+                segments.append(
+                    AudioSegment(
+                        id=f"audio_{Path(filename).stem}_{part_index:02d}",
+                        source_file=filename,
+                        start=round(start, 3),
+                        end=round(take_end, 3),
+                        contains_speech=True,
+                        transcript="",
+                        speaker_type="on_camera",
+                        audio_type="soundbite",
+                        speech_quality=_speech_quality(levels, True),
+                        information_value=0.55,
+                        news_relevance=0.4,
+                        rms=levels["rms"],
+                        peak=levels["peak"],
+                        playback_gain=_playback_gain(levels),
+                    )
+                )
         else:
-            audio_type, speaker = classify_audio("", script, _speech_quality(levels, False), speech=False)
             span_end = float(clip.get("usable_end") or clip.get("duration") or 4)
             span_start = float(clip.get("usable_start") or 0)
             if span_end - span_start < 0.6:
                 span_end = span_start + min(4.0, float(clip.get("duration") or 4))
+            long_field = (span_end - span_start) > 8 and levels["rms"] > 0.04
+            audio_type, speaker = ("unusable_audio", "unknown") if long_field else classify_audio("", script, _speech_quality(levels, False), speech=False)
             segments.append(
                 AudioSegment(
                     id=f"audio_{Path(filename).stem}_01",
@@ -66,8 +97,8 @@ def analyse_video_audio(root: Path, footage: dict, settings: Settings, script: s
                     speaker_type=speaker,
                     audio_type=audio_type,
                     speech_quality=0.0,
-                    information_value=0.12 if audio_type == "natural_sound" else 0.02,
-                    news_relevance=0.35 if audio_type == "natural_sound" else 0.05,
+                    information_value=0.02,
+                    news_relevance=0.05,
                     rms=levels["rms"],
                     peak=levels["peak"],
                     playback_gain=_playback_gain(levels),
@@ -75,6 +106,64 @@ def analyse_video_audio(root: Path, footage: dict, settings: Settings, script: s
             )
         _ = index
     return segments
+
+
+def _bengali_ratio(text: str) -> float:
+    letters = [char for char in text if char.isalpha() or "\u0980" <= char <= "\u09FF"]
+    if not letters:
+        return 0.0
+    bengali = sum(1 for char in letters if "\u0980" <= char <= "\u09FF")
+    return bengali / len(letters)
+
+
+def _speech_islands(path: Path, duration: float) -> list[tuple[float, float]]:
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-i",
+        str(path),
+        "-af",
+        "silencedetect=noise=-14dB:d=0.3",
+        "-f",
+        "null",
+        "-",
+    ]
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        return []
+    blob = (completed.stderr or "") + (completed.stdout or "")
+    silent: list[tuple[float, float]] = []
+    pending: float | None = None
+    for line in blob.splitlines():
+        start_match = re.search(r"silence_start:\s*([-\d.]+)", line)
+        end_match = re.search(r"silence_end:\s*([-\d.]+)", line)
+        if start_match:
+            pending = float(start_match.group(1))
+        if end_match:
+            end = float(end_match.group(1))
+            start = 0.0 if pending is None else pending
+            if end > start:
+                silent.append((max(0.0, start), end))
+            pending = None
+    if pending is not None and duration:
+        silent.append((max(0.0, pending), duration))
+    silent.sort()
+    merged: list[tuple[float, float]] = []
+    for start, end in silent:
+        if merged and start <= merged[-1][1] + 0.08:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    islands: list[tuple[float, float]] = []
+    cursor = 0.0
+    for start, end in merged:
+        if start - cursor >= 2.2:
+            islands.append((cursor, start))
+        cursor = max(cursor, end)
+    if duration and duration - cursor >= 2.2:
+        islands.append((cursor, duration))
+    return islands[:8]
 
 
 def classify_audio(text: str, script: str, quality: float, speech: bool) -> tuple[AudioType, str]:
@@ -185,3 +274,59 @@ def _parse_db(blob: str, pattern: str) -> float | None:
 
 def _db_to_amp(db: float) -> float:
     return max(1e-6, min(1.0, 10 ** (db / 20)))
+
+
+def promote_speech_islands(root: Path, footage: dict, segments: list[AudioSegment]) -> list[AudioSegment]:
+    """If Whisper text is unusable, keep 2–8s field-speech windows as bite candidates."""
+    if any(_usable_text_bite(item) for item in segments):
+        return segments
+    if any(
+        item.contains_speech
+        and item.audio_type == "soundbite"
+        and 2.0 <= (item.end - item.start) <= 14.0
+        for item in segments
+    ):
+        return segments
+    upgraded: list[AudioSegment] = []
+    for clip in footage.get("clips") or []:
+        filename = clip.get("filename") or ""
+        source = root / "footage" / filename
+        if not source.exists():
+            continue
+        levels = _measure_levels(source)
+        islands = _speech_islands(source, float(clip.get("duration") or 0))
+        added = False
+        for part_index, (start, end) in enumerate(islands, start=1):
+            span = end - start
+            if span < 2.2:
+                continue
+            upgraded.append(
+                AudioSegment(
+                    id=f"audio_{Path(filename).stem}_{part_index:02d}",
+                    source_file=filename,
+                    start=round(start, 3),
+                    end=round(start + min(span, 8.0), 3),
+                    contains_speech=True,
+                    transcript="",
+                    speaker_type="on_camera",
+                    audio_type="soundbite",
+                    speech_quality=_speech_quality(levels, True),
+                    information_value=0.55,
+                    news_relevance=0.4,
+                    rms=levels["rms"],
+                    peak=levels["peak"],
+                    playback_gain=_playback_gain(levels),
+                )
+            )
+            added = True
+        if not added:
+            upgraded.extend(item for item in segments if item.source_file == filename)
+    return upgraded or segments
+
+
+def _usable_text_bite(item: AudioSegment) -> bool:
+    return (
+        item.contains_speech
+        and _bengali_ratio(item.transcript or "") >= 0.45
+        and item.audio_type not in {"irrelevant_speech", "unusable_audio", "background_chatter"}
+    )

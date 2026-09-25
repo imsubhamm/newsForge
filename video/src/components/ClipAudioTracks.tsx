@@ -18,11 +18,9 @@ export function ClipAudioTracks({
   const { fps } = useVideoConfig();
   const fade = Math.max(2, Math.round((FADE_MS / 1000) * fps));
   const audio = clip.audio;
-  const voiceVolume = audio?.voiceoverEnabled === false ? 0 : (audio?.voiceVolume ?? 1);
-  let sourceVolume = audio?.sourceVolume ?? 0;
-  if (voiceVolume > 0.4 && sourceVolume > 0.35) {
-    sourceVolume = Math.min(sourceVolume, 0.22);
-  }
+  const wantVoice = audio?.mode !== "SOURCE_SOUNDBITE" && audio?.mode !== "NAT_SOUND_ONLY" && audio?.voiceoverEnabled !== false;
+  const voiceVolume = wantVoice ? (audio?.voiceVolume ?? 1) : 0;
+  const sourceVolume = voiceVolume > 0 ? 0 : (audio?.sourceVolume ?? 0);
 
   const faded = (target: number) => {
     if (target <= 0) {

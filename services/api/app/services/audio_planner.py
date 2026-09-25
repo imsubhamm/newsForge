@@ -16,6 +16,7 @@ from app.schemas import (
     TimelinePlan,
 )
 from app.services.alignment import normalize_token
+from app.services.narration import SOUNDBITE_MARKERS
 
 
 NAT_TYPES = {"natural_sound", "ambient_sound"}
@@ -43,25 +44,35 @@ def apply_audio_editorial(
     rebuilt: list[TimelineClip] = []
     matches: list[AudioMatchDebug] = []
     nat_break_used = False
+    bite_slots = 2
 
     for segment in narration:
         originals = [clip for clip in plan.timeline if clip.narration_segment_id == segment.id]
         if not originals:
             continue
         ranked = _rank_audio(segment, segments, used)
-        decision = _decide(segment, ranked, segments, settings, allow_nat_break=not nat_break_used)
+        decision = _decide(
+            segment,
+            ranked,
+            used,
+            settings,
+            allow_nat_break=not nat_break_used,
+            bite_slots=bite_slots,
+        )
         matches.append(_debug_row(segment, ranked, decision, segments))
 
         cursor = rebuilt[-1].end if rebuilt else 0.0
         if decision["mode"] == "SOURCE_SOUNDBITE" and decision["action"] == "REPLACE_VOICEOVER":
             bite = _by_id(segments, decision["audio_id"])
             used.add(bite.id)
+            bite_slots = max(0, bite_slots - 1)
             rebuilt.append(_bite_clip(cursor, originals[0], bite, segment, decision, settings, replace=True))
         elif decision["mode"] == "SOURCE_SOUNDBITE" and decision["action"] == "INSERT_AFTER":
             rebuilt.extend(_keep_voice_clips(cursor, originals, "VOICEOVER_ONLY", settings, "KEEP_VOICEOVER", decision["reason"]))
             cursor = rebuilt[-1].end
             bite = _by_id(segments, decision["audio_id"])
             used.add(bite.id)
+            bite_slots = max(0, bite_slots - 1)
             rebuilt.append(_bite_clip(cursor, originals[-1], bite, segment, decision, settings, replace=False))
         elif decision["mode"] == "VOICEOVER_WITH_NAT_SOUND":
             nat = _by_id(segments, decision["audio_id"]) if decision.get("audio_id") else None
@@ -80,6 +91,9 @@ def apply_audio_editorial(
 
     if not rebuilt:
         return plan, matches
+
+    for clip in rebuilt:
+        clip.audio = _exclusive_audio(clip.audio)
 
     duration = round(rebuilt[-1].end, 3)
     captions = _rebuild_captions(rebuilt, alignment, segments)
@@ -129,8 +143,23 @@ def apply_audio_override(plan: TimelinePlan, clip_index: int, mode: AudioMode, s
         audio.source = clip.source
         audio.source_start = clip.source_start
         audio.source_end = clip.source_end
-    plan.timeline[clip_index] = clip.model_copy(update={"audio": audio})
+    plan.timeline[clip_index] = clip.model_copy(update={"audio": _exclusive_audio(audio)})
     return TimelinePlan.model_validate(plan.model_dump())
+
+
+def _exclusive_audio(audio: ClipAudio) -> ClipAudio:
+    """Never play reporter speech and clip speech together."""
+    if audio.mode == "SOURCE_SOUNDBITE" or audio.mode == "NAT_SOUND_ONLY":
+        audio.voiceover_enabled = False
+        audio.voice_volume = 0.0
+        if audio.source_volume <= 0:
+            audio.source_volume = 1.0
+        return audio
+    audio.voiceover_enabled = True
+    audio.voice_volume = 1.0
+    audio.source_volume = 0.0
+    audio.mode = "VOICEOVER_ONLY" if audio.mode == "VOICEOVER_WITH_NAT_SOUND" else audio.mode
+    return audio
 
 
 def attach_audio_debug(debug: SemanticDebug, matches: list[AudioMatchDebug]) -> SemanticDebug:
@@ -173,14 +202,15 @@ def _rank_audio(
 def _decide(
     segment: NarrationSegment,
     ranked: list[tuple[AudioComparison, AudioSegment]],
-    _segments: list[AudioSegment],
+    used: set[str],
     settings: Settings,
     allow_nat_break: bool,
+    bite_slots: int,
 ) -> dict:
+    _ = allow_nat_break
     bite = next((pair for pair in ranked if _usable_bite(pair[0], pair[1], settings)), None)
-    nat = next((pair for pair in ranked if pair[1].audio_type in NAT_TYPES and pair[1].rms > 0.01), None)
 
-    if bite:
+    if bite_slots > 0 and bite:
         comparison, item = bite
         if comparison.audio_quality < settings.bite_quality_min:
             return {
@@ -207,23 +237,49 @@ def _decide(
                 "needs_review": False,
             }
 
-    if nat and segment.type in {"hook", "location", "event"}:
-        item = nat[1]
-        return {
-            "mode": "VOICEOVER_WITH_NAT_SOUND",
-            "action": "MIX_NAT",
-            "audio_id": item.id,
-            "reason": "Keep the reporter voice and sit usable natural sound underneath.",
-            "needs_review": False,
-        }
+    if bite_slots > 0 and _wants_field_voice(segment):
+        island = _field_voice(ranked, used)
+        if island:
+            _comparison, item = island
+            return {
+                "mode": "SOURCE_SOUNDBITE",
+                "action": "INSERT_AFTER",
+                "audio_id": item.id,
+                "reason": "The script hands this beat to someone on camera. Reporter VO plays first, then field voice only.",
+                "needs_review": not bool(item.transcript.strip()),
+            }
 
     return {
         "mode": "VOICEOVER_ONLY",
         "action": "KEEP_VOICEOVER",
         "audio_id": "",
-        "reason": "No usable original speech or natural sound beat this narration.",
+        "reason": "Play reporter voice only. Original clip audio stays muted until a real soundbite is selected.",
         "needs_review": False,
     }
+
+
+def _wants_field_voice(segment: NarrationSegment) -> bool:
+    if segment.audio_intent == "soundbite":
+        return True
+    return any(mark in segment.text for mark in SOUNDBITE_MARKERS)
+
+
+def _field_voice(
+    ranked: list[tuple[AudioComparison, AudioSegment]], used: set[str]
+) -> tuple[AudioComparison, AudioSegment] | None:
+    candidates: list[tuple[AudioComparison, AudioSegment]] = []
+    for comparison, item in ranked:
+        if item.id in used or not item.contains_speech:
+            continue
+        if item.audio_type in {"irrelevant_speech", "unusable_audio", "background_chatter"}:
+            continue
+        span = item.end - item.start
+        if span < 2.0 or span > 14.0:
+            continue
+        if item.audio_type in BITE_TYPES or item.speech_quality >= 0.35:
+            candidates.append((comparison, item))
+    candidates.sort(key=lambda pair: (-pair[1].speech_quality, abs(6.0 - (pair[1].end - pair[1].start))))
+    return candidates[0] if candidates else None
 
 
 def _usable_bite(comparison: AudioComparison, item: AudioSegment, settings: Settings) -> bool:

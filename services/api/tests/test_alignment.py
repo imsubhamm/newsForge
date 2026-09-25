@@ -1,5 +1,6 @@
-from app.schemas import Transcript, TranscriptWord
+from app.schemas import AlignmentResult, CaptionCue, Transcript, TranscriptWord
 from app.services.alignment import align_script_to_transcript
+from app.services.narration import segment_narration
 
 
 def test_alignment_keeps_reporter_spelling() -> None:
@@ -64,3 +65,47 @@ def test_alignment_covers_whisper_duration() -> None:
     assert abs(result.cues[-1].end - 4.0) < 0.05
     for previous, current in zip(result.cues, result.cues[1:], strict=False):
         assert current.start >= previous.start
+
+
+def test_alignment_uses_script_length_when_whisper_clocks_are_garbage() -> None:
+    script = (
+        "দুর্গাপুর: টানা বৃষ্টিতে জলমগ্ন বীরভানপুর। "
+        "স্থানীয়দের অভিযোগ, নিকাশি ব্যবস্থা বেহাল। "
+        "বিক্ষোভের জেরে যান চলাচল ব্যাহত হয়।"
+    )
+    transcript = Transcript(
+        language="bn",
+        duration=30.0,
+        words=[
+            TranscriptWord(start=0.8, end=2.0, text="নানের"),
+            TranscriptWord(start=2.0, end=26.0, text="তেররিযু"),
+            TranscriptWord(start=26.0, end=27.0, text="কাচে"),
+        ],
+    )
+    result = align_script_to_transcript(script, transcript)
+    assert result.match_ratio < 0.35
+    assert result.cues[0].start == 0
+    assert abs(result.cues[-1].end - 30.0) < 0.05
+    spans = [cue.end - cue.start for cue in result.cues]
+    assert max(spans) < 12
+    assert any(cue.start > 8 for cue in result.cues)
+
+
+def test_narration_throws_on_script_cues_with_even_clocks() -> None:
+    script = (
+        "দুর্গাপুর: টানা বৃষ্টিতে জলমগ্ন বীরভানপুর। "
+        "স্থানীয়দের অভিযোগ, নিকাশি ব্যবস্থা বেহাল। "
+        "রাস্তায় যান চলাচল ব্যাহত হয়।"
+    )
+    alignment = AlignmentResult(
+        duration=30.0,
+        match_ratio=0.0,
+        cues=[CaptionCue(start=0, end=30, text=script)],
+    )
+    segments = segment_narration(script, alignment)
+    assert len(segments) == 3
+    assert segments[0].audio_intent == "script"
+    assert segments[1].audio_intent == "soundbite"
+    assert segments[2].audio_intent == "script"
+    assert segments[1].start > 6
+    assert segments[1].end - segments[1].start > 4

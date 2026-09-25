@@ -140,6 +140,7 @@ class NarrationSegment(BaseModel):
     actions: list[str] = Field(default_factory=list)
     location: str | None = None
     visual_requirements: list[str] = Field(default_factory=list)
+    audio_intent: Literal["script", "soundbite"] = "script"
 
 
 class VisualScene(BaseModel):

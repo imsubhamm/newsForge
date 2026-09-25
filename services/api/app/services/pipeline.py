@@ -21,7 +21,7 @@ from app.services.audio_planner import apply_audio_editorial, attach_audio_debug
 from app.services.semantic_planner import build_semantic_plan
 from app.services.timeline_builder import TimelineBuildError
 from app.services.transcription import TranscriptionError, transcribe_voice
-from app.services.video_audio import analyse_video_audio
+from app.services.video_audio import analyse_video_audio, promote_speech_islands
 
 logger = logging.getLogger("bangla.news")
 
@@ -53,21 +53,19 @@ def process_job(job_id: str) -> None:
                 },
             )
 
-        alignment = load_alignment(settings, job_id)
-        if alignment is None:
-            set_job_status(db, settings, job_id, JobStatus.ALIGNING)
-            stage_started = time.perf_counter()
-            alignment = align_script_to_transcript(script, transcript)
-            write_json(root / "analysis" / "alignment.json", alignment.model_dump())
-            logger.info(
-                "script aligned",
-                extra={
-                    "job_id": job_id,
-                    "stage": "ALIGNING",
-                    "duration_ms": int((time.perf_counter() - stage_started) * 1000),
-                },
-            )
-            set_job_status(db, settings, job_id, JobStatus.ALIGNED)
+        set_job_status(db, settings, job_id, JobStatus.ALIGNING)
+        stage_started = time.perf_counter()
+        alignment = align_script_to_transcript(script, transcript)
+        write_json(root / "analysis" / "alignment.json", alignment.model_dump())
+        logger.info(
+            "script aligned",
+            extra={
+                "job_id": job_id,
+                "stage": "ALIGNING",
+                "duration_ms": int((time.perf_counter() - stage_started) * 1000),
+            },
+        )
+        set_job_status(db, settings, job_id, JobStatus.ALIGNED)
 
         set_job_status(db, settings, job_id, JobStatus.ANALYSING_FOOTAGE)
         stage_started = time.perf_counter()
@@ -91,7 +89,8 @@ def process_job(job_id: str) -> None:
             audio_segments = [AudioSegment.model_validate(item) for item in _read_json(audio_path).get("segments") or []]
         else:
             audio_segments = analyse_video_audio(root, footage, settings, script)
-            write_json(audio_path, {"segments": [item.model_dump() for item in audio_segments]})
+        audio_segments = promote_speech_islands(root, footage, audio_segments)
+        write_json(audio_path, {"segments": [item.model_dump() for item in audio_segments]})
         logger.info(
             "scenes analysed",
             extra={
