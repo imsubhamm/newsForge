@@ -24,6 +24,10 @@ __pycache__/
 *.db-journal
 
 # Job storage and generated media
+storage/assets/*
+!storage/assets/.gitkeep
+storage/frames/*
+!storage/frames/.gitkeep
 storage/jobs/*
 !storage/jobs/.gitkeep
 !storage/jobs/sample-demo/

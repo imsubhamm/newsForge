@@ -58,6 +58,10 @@ class Settings(BaseSettings):
         return (self.storage_path if self.storage_path.is_absolute() else repo_root() / self.storage_path) / "jobs"
 
     @property
+    def frames_dir(self) -> Path:
+        return (self.storage_path if self.storage_path.is_absolute() else repo_root() / self.storage_path) / "frames"
+
+    @property
     def data_dir(self) -> Path:
         return repo_root() / "data"
 
@@ -74,5 +78,6 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     settings = Settings()
     settings.jobs_dir.mkdir(parents=True, exist_ok=True)
+    settings.frames_dir.mkdir(parents=True, exist_ok=True)
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     return settings

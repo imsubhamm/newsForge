@@ -276,6 +276,31 @@ class JobListResponse(BaseModel):
     jobs: list[JobResponse]
 
 
+AspectRatio = Literal["16:9", "9:16"]
+
+
+class FrameJobResponse(BaseModel):
+    id: str
+    aspect_ratio: AspectRatio
+    headline: str
+    header: str = ""
+    footer: str = ""
+    location: str = ""
+    channel_name: str
+    status: str
+    error: str | None = None
+    created_at: str
+    width: int
+    height: int
+    output_url: str | None = None
+    overlay_url: str | None = None
+    source_filename: str | None = None
+
+
+class FrameJobListResponse(BaseModel):
+    jobs: list[FrameJobResponse]
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None

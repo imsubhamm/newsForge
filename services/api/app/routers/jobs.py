@@ -184,7 +184,7 @@ def start_render_only(
     return get_job(db, settings, job_id)
 
 
-@router.get("/{job_id}/output")
+@router.api_route("/{job_id}/output", methods=["GET", "HEAD"])
 def download_output(job_id: str, settings: Settings = Depends(settings_dep)) -> FileResponse:
     try:
         output = job_dir(settings.jobs_dir, job_id) / "output" / "final.mp4"
@@ -195,9 +195,10 @@ def download_output(job_id: str, settings: Settings = Depends(settings_dep)) -> 
     return FileResponse(
         output,
         media_type="video/mp4",
+        filename="final.mp4",
+        content_disposition_type="inline",
         headers={
             "Cache-Control": "no-store",
-            "Content-Disposition": "inline",
             "Accept-Ranges": "bytes",
         },
     )
