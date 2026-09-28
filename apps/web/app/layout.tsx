@@ -19,7 +19,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <div className="mx-auto min-h-screen max-w-5xl px-5 py-10">{children}</div>
+        <div className="mx-auto min-h-screen max-w-5xl px-5 py-10">
+          <nav className="mb-8 flex flex-wrap items-center gap-4 text-sm">
+            <a href="/" className="text-[#e4c36a] hover:underline">
+              News Editor
+            </a>
+            <span className="text-white/20">/</span>
+            <a href="/frame-add" className="text-[#e4c36a] hover:underline">
+              Frame Add
+            </a>
+          </nav>
+          {children}
+        </div>
       </body>
     </html>
   );

@@ -9,7 +9,15 @@ from app.ai.provider import get_ai_provider
 from app.config import Settings, get_settings
 from app.db import SessionLocal
 from app.models import JobStatus
-from app.schemas import AlignmentResult, AudioSegment, SemanticDebug, TimelinePlan, Transcript
+from app.schemas import (
+    AlignmentResult,
+    AudioSegment,
+    NarrationSegment,
+    SemanticDebug,
+    TimelinePlan,
+    Transcript,
+    VisualScene,
+)
 from app.services.alignment import align_script_to_transcript
 from app.services.footage import FootageError, analyse_footage
 from app.services.jobs import find_voice, set_job_status, write_json
@@ -69,8 +77,14 @@ def process_job(job_id: str) -> None:
 
         set_job_status(db, settings, job_id, JobStatus.ANALYSING_FOOTAGE)
         stage_started = time.perf_counter()
-        footage = analyse_footage(root, settings)
-        write_json(root / "analysis" / "footage.json", footage)
+        footage_path = root / "analysis" / "footage.json"
+        scenes_path = root / "analysis" / "scenes.json"
+        narration_path = root / "analysis" / "narration.json"
+        if footage_path.exists():
+            footage = _read_json(footage_path)
+        else:
+            footage = analyse_footage(root, settings)
+            write_json(footage_path, footage)
         logger.info(
             "footage processed",
             extra={
@@ -80,10 +94,16 @@ def process_job(job_id: str) -> None:
             },
         )
 
-        scenes = detect_scenes(root, footage, settings)
-        write_json(root / "analysis" / "scenes.json", {"scenes": [scene.model_dump() for scene in scenes]})
-        narration = segment_narration(script, alignment)
-        write_json(root / "analysis" / "narration.json", {"segments": [item.model_dump() for item in narration]})
+        if scenes_path.exists():
+            scenes = [VisualScene.model_validate(item) for item in _read_json(scenes_path).get("scenes") or []]
+        else:
+            scenes = detect_scenes(root, footage, settings)
+            write_json(scenes_path, {"scenes": [scene.model_dump() for scene in scenes]})
+        if narration_path.exists():
+            narration = [NarrationSegment.model_validate(item) for item in _read_json(narration_path).get("segments") or []]
+        else:
+            narration = segment_narration(script, alignment)
+            write_json(narration_path, {"segments": [item.model_dump() for item in narration]})
         audio_path = root / "analysis" / "video_audio.json"
         if audio_path.exists():
             audio_segments = [AudioSegment.model_validate(item) for item in _read_json(audio_path).get("segments") or []]

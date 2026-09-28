@@ -17,6 +17,10 @@ if [[ ! -f "$FONT_DIR/NotoSansBengali-Bold.ttf" ]]; then
   curl -L --fail --retry 3 -o "$FONT_DIR/NotoSansBengali-Bold.ttf" \
     "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansBengali/NotoSansBengali-Bold.ttf"
 fi
+if [[ ! -f "$FONT_DIR/NotoSans-Bold.ttf" ]]; then
+  curl -L --fail --retry 3 -o "$FONT_DIR/NotoSans-Bold.ttf" \
+    "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
+fi
 
 make_clip() {
   local name="$1"

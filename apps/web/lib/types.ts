@@ -117,3 +117,23 @@ export const STEP_LABELS: Record<string, string> = {
 };
 
 export const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED"]);
+
+export type AspectRatio = "16:9" | "9:16";
+
+export type FrameJob = {
+  id: string;
+  aspect_ratio: AspectRatio;
+  headline: string;
+  header?: string;
+  footer?: string;
+  location?: string;
+  channel_name: string;
+  status: string;
+  error: string | null;
+  created_at: string;
+  width: number;
+  height: number;
+  output_url: string | null;
+  overlay_url: string | null;
+  source_filename: string | null;
+};

@@ -15,6 +15,13 @@ export default async function HomePage() {
           Upload a script, voice-over, and raw footage. The editor builds a vertical news reel for
           Instagram, Facebook, and YouTube Shorts — you approve before anything is published.
         </p>
+        <p className="text-sm text-white/55">
+          Need a banner and footer on an already-cut video?{" "}
+          <a href="/frame-add" className="text-[#e4c36a] underline">
+            Open Frame Add
+          </a>
+          .
+        </p>
       </header>
 
       <section className="rounded-3xl border border-[#e4c36a]/15 bg-[#111827]/75 p-6 shadow-2xl md:p-8">
