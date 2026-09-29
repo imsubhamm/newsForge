@@ -1,0 +1,22 @@
+[Unit]
+Description=News Editor Next.js (news.tathyaforge.in)
+After=network-online.target news-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/newseditor/apps/web
+EnvironmentFile=/opt/newseditor/.env
+Environment=NODE_ENV=production
+Environment=PORT=3010
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/opt/newseditor/apps/web/node_modules/.bin/next start --hostname 127.0.0.1 --port 3010
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

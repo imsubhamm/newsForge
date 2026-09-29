@@ -1,0 +1,20 @@
+[Unit]
+Description=News Editor FastAPI (news.tathyaforge.in)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/newseditor/services/api
+EnvironmentFile=/opt/newseditor/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/newseditor/services/api/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8010
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -2,8 +2,12 @@ import type { AudioMode, FrameJob, Job, SemanticDebug, TimelinePlan } from "./ty
 
 export function apiOrigin(): string {
   if (typeof window !== "undefined") {
-    const protocol = window.location.protocol === "https:" ? "https:" : "http:";
-    return `${protocol}//${window.location.hostname}:8000`;
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+      return `${protocol}//${host}:8000`;
+    }
+    return window.location.origin;
   }
   return process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 }

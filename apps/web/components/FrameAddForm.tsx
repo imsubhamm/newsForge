@@ -221,7 +221,9 @@ function FramePreview({
                 <span className="whitespace-nowrap bg-[#ecedee] px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-neutral-800">
                   {location || "দুর্গাপুর"}
                 </span>
-                <span className="truncate text-[11px] font-semibold text-white">{header}</span>
+                <span className="min-w-0 flex-1 px-1 text-center text-[11px] font-semibold leading-tight text-white">
+                  {header}
+                </span>
               </div>
               <div className="shrink-0 border border-[#e4c36a] bg-white px-1.5 py-1 text-center leading-tight">
                 <div className="text-[11px] font-bold text-blue-900">আমার</div>
@@ -234,7 +236,9 @@ function FramePreview({
                 <div className="text-[12px] font-bold text-blue-900">আমার</div>
                 <div className="text-[12px] font-bold text-red-600">কথা</div>
               </div>
-              <div className="ml-16 bg-[#cc1101] px-3 py-2 text-[11px] text-white">{footer}</div>
+              <div className="ml-16 flex min-h-[1.75rem] items-center justify-center bg-[#cc1101] px-3 py-2 text-center text-[11px] font-semibold leading-tight text-white">
+                {footer}
+              </div>
               <div className="ml-16 bg-[#e4c000] px-3 py-1 text-[10px] text-red-800">
                 খবরের জন্য ফোন করুন 7407897657
               </div>

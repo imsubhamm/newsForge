@@ -130,27 +130,37 @@ def build_text_layer(
         box = list(map_box(HEADER_TEXT_BOX, width=width, height=height, aspect_ratio=aspect_ratio))
         if header_left is not None:
             box[0] = max(box[0], header_left)
+        pad_x, pad_y = 6, 2
         sprite = _fit_shaped_sprite(
             top_line,
             path,
             size,
-            max_width=max(8, box[2] - box[0] - 8),
-            max_height=max(8, box[3] - box[1] - 4),
+            max_width=max(8, box[2] - box[0] - pad_x * 2),
+            max_height=max(8, box[3] - box[1] - pad_y * 2),
             fill=HEADER_INK,
         )
-        image.alpha_composite(sprite, (box[0] + 4, box[1] + max(0, (box[3] - box[1] - sprite.height) // 2)))
+        _paste_centered(
+            image,
+            sprite,
+            (box[0] + pad_x, box[1] + pad_y, box[2] - pad_x, box[3] - pad_y),
+        )
     if bottom_line:
         path, size = _font_for(bottom_line, fonts["footer"])
         box = map_box(FOOTER_BOX, width=width, height=height, aspect_ratio=aspect_ratio)
+        pad_x, pad_y = 8, 2
         sprite = _fit_shaped_sprite(
             bottom_line,
             path,
             size,
-            max_width=max(8, box[2] - box[0] - 8),
-            max_height=max(8, box[3] - box[1]),
+            max_width=max(8, box[2] - box[0] - pad_x * 2),
+            max_height=max(8, box[3] - box[1] - pad_y * 2),
             fill=HEADER_INK,
         )
-        image.alpha_composite(sprite, (box[0] + 4, box[1] + max(0, (box[3] - box[1] - sprite.height) // 2)))
+        _paste_centered(
+            image,
+            sprite,
+            (box[0] + pad_x, box[1] + pad_y, box[2] - pad_x, box[3] - pad_y),
+        )
     dest.parent.mkdir(parents=True, exist_ok=True)
     image.save(dest, "PNG")
     return dest
@@ -220,12 +230,19 @@ def _fit_shaped_sprite(
     max_height: int,
     fill: tuple[int, int, int, int] = (255, 255, 255, 255),
 ) -> Image.Image:
-    size = start_size
-    sprite = render_shaped_text(text, font_path, size, fill)
-    while size >= 12 and (sprite.width > max_width or sprite.height > max_height):
-        size -= 2
-        sprite = render_shaped_text(text, font_path, size, fill)
-    return sprite
+    """Largest shaped sprite that still fits inside the given box (grow or shrink)."""
+    lo = 8
+    hi = max(start_size, max_height, 12)
+    best = render_shaped_text(text, font_path, lo, fill)
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        sprite = render_shaped_text(text, font_path, mid, fill)
+        if sprite.width <= max_width and sprite.height <= max_height:
+            best = sprite
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return best
 
 
 def render_shaped_text(

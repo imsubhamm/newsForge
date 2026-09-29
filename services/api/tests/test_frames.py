@@ -107,7 +107,7 @@ def test_bengali_location_uses_shaped_conjuncts(tmp_path: Path) -> None:
 def test_header_and_footer_land_on_red_bars(tmp_path: Path) -> None:
     from PIL import Image
 
-    from app.services.frame_overlay import FOOTER_BOX, HEADER_BAR, HEADER_FILL, map_box
+    from app.services.frame_overlay import FOOTER_BOX, HEADER_BAR, HEADER_FILL, HEADER_TEXT_BOX, map_box
 
     dest = tmp_path / "bars.png"
     build_text_layer(
@@ -130,6 +130,58 @@ def test_header_and_footer_land_on_red_bars(tmp_path: Path) -> None:
         if image.getpixel((x, fy))[3] == 255
     ]
     assert any(pixel[0] > 200 and pixel[1] > 200 for pixel in ink)
+
+
+def test_header_footer_centered_and_fill_box(tmp_path: Path) -> None:
+    from PIL import Image
+
+    from app.services.frame_overlay import FOOTER_BOX, HEADER_TEXT_BOX, map_box
+
+    dest = tmp_path / "center.png"
+    build_text_layer(
+        dest,
+        aspect_ratio="16:9",
+        header="test",
+        footer="ok",
+        location="",
+    )
+    image = Image.open(dest).convert("RGBA")
+    header = map_box(HEADER_TEXT_BOX, width=1920, height=1080, aspect_ratio="16:9")
+    footer = map_box(FOOTER_BOX, width=1920, height=1080, aspect_ratio="16:9")
+
+    def ink_xs(box: tuple[int, int, int, int]) -> list[int]:
+        left, top, right, bottom = box
+        mid_y = (top + bottom) // 2
+        return [
+            x
+            for x in range(left, right)
+            if image.getpixel((x, mid_y))[3] > 200
+        ]
+
+    header_xs = ink_xs(header)
+    footer_xs = ink_xs(footer)
+    assert header_xs, "header text missing"
+    assert footer_xs, "footer text missing"
+    header_mid = (min(header_xs) + max(header_xs)) / 2
+    footer_mid = (min(footer_xs) + max(footer_xs)) / 2
+    header_center = (header[0] + header[2]) / 2
+    footer_center = (footer[0] + footer[2]) / 2
+    assert abs(header_mid - header_center) < (header[2] - header[0]) * 0.12
+    assert abs(footer_mid - footer_center) < (footer[2] - footer[0]) * 0.12
+
+    from app.services.frame_overlay import _fit_shaped_sprite, _font_for, _load_fonts
+
+    fonts = _load_fonts("16:9")
+    path, size = _font_for("ok", fonts["footer"])
+    sprite = _fit_shaped_sprite(
+        "ok",
+        path,
+        size,
+        max_width=max(8, footer[2] - footer[0] - 16),
+        max_height=max(8, footer[3] - footer[1] - 4),
+    )
+    # Short footer should grow toward bar height (not stay at the tiny default).
+    assert sprite.height >= (footer[3] - footer[1]) * 0.65
 
 
 def test_overlay_filter_chromakeys_banner() -> None:
